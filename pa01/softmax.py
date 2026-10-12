@@ -4,7 +4,7 @@ import os
 from builtins import range
 from builtins import object
 import numpy as np
-from softmax import *
+from pa01.softmax import *
 from past.builtins import xrange
 
 

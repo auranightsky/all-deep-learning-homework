@@ -5,7 +5,7 @@ import numpy as np
 
 # from dlcv.layers import *
 # from dlcv.layer_utils import *
-from softmax import *
+from pa01.softmax import *
 
 
 
