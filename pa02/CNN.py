@@ -28,13 +28,46 @@ def conv_forward(x, w, b, conv_param):
       W' = 1 + (W + 2 * pad - WW) / stride
     - cache: (x, w, b, conv_param)
     """
-    out = None
     ###########################################################################
     # TODO: Implement the convolutional forward pass.                         #
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    stride = conv_param["stride"]
+    pad = conv_param["pad"]
+
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+
+    # Add zero-padding around the input
+    x_pad = np.pad(
+        x,
+        ((0, 0), (0, 0), (pad, pad), (pad, pad)),
+        mode="constant"
+    )
+
+    # Calculate output dimensions
+    H_out = 1 + (H + 2 * pad - HH) // stride
+    W_out = 1 + (W + 2 * pad - WW) // stride
+
+    out = np.zeros((N, F, H_out, W_out))
+
+    # Slide each filter across the input
+    for n in range(N):
+        for f in range(F):
+            for i in range(H_out):
+                for j in range(W_out):
+                    h_start = i * stride
+                    h_end = h_start + HH
+
+                    w_start = j * stride
+                    w_end = w_start + WW
+
+                    # Extract the current input region
+                    region = x_pad[n, :, h_start:h_end, w_start:w_end]
+
+                    # Multiply, sum, and add bias
+                    out[n, f, i, j] = (np.sum(region * w[f]) + b[f])
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -54,12 +87,63 @@ def conv_backward(dout, cache):
     - dw: Gradient with respect to w
     - db: Gradient with respect to b
     """
-    dx, dw, db = None, None, None
+    
     ###########################################################################
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    x, w, b, conv_param = cache
+
+    stride = conv_param["stride"]
+    pad = conv_param["pad"]
+
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+    _, _, H_out, W_out = dout.shape
+
+    # Pad the input
+    x_pad = np.pad(
+        x,
+        ((0, 0), (0, 0), (pad, pad), (pad, pad)),
+        mode="constant"
+    )
+
+    # Initialize gradients
+    dx_pad = np.zeros_like(x_pad)
+    dw = np.zeros_like(w)
+    db = np.zeros_like(b)
+
+    # Calculate gradients
+    for n in range(N):
+        for f in range(F):
+            for i in range(H_out):
+                for j in range(W_out):
+                    h_start = i * stride
+                    h_end = h_start + HH
+
+                    w_start = j * stride
+                    w_end = w_start + WW
+
+                    # Current input region
+                    region = x_pad[n, :, h_start:h_end, w_start:w_end]
+
+                    # Upstream gradient for this output
+                    grad = dout[n, f, i, j]
+
+                    # Gradient with respect to the bias
+                    db[f] += grad
+
+                    # Gradient with respect to the filter
+                    dw[f] += region * grad
+
+                    # Gradient with respect to the input region
+                    dx_pad[n, :, h_start:h_end, w_start:w_end] += w[f] * grad
+
+    # Remove padding from the input gradient
+    if pad > 0:
+        dx = dx_pad[:, :, pad:-pad, pad:-pad]
+    else:
+        dx = dx_pad
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -86,12 +170,39 @@ def max_pool_forward(x, pool_param):
       W' = 1 + (W - pool_width) / stride
     - cache: (x, pool_param)
     """
-    out = None
+    
     ###########################################################################
     # TODO: Implement the max-pooling forward pass                            #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    pool_height = pool_param["pool_height"]
+    pool_width = pool_param["pool_width"]
+    stride = pool_param["stride"]
+
+    N, C, H, W = x.shape
+
+    # Calculate output dimensions
+    H_out = 1 + (H - pool_height) // stride
+    W_out = 1 + (W - pool_width) // stride
+
+    out = np.zeros((N, C, H_out, W_out))
+
+    # Slide the pooling window across each input
+    for n in range(N):
+        for c in range(C):
+            for i in range(H_out):
+                for j in range(W_out):
+                    h_start = i * stride
+                    h_end = h_start + pool_height
+
+                    w_start = j * stride
+                    w_end = w_start + pool_width
+
+                    # Extract the current pooling region
+                    region = x[n, c, h_start:h_end, w_start:w_end]
+
+                    # Keep only the maximum value
+                    out[n, c, i, j] = np.max(region)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -109,12 +220,42 @@ def max_pool_backward(dout, cache):
     Returns:
     - dx: Gradient with respect to x
     """
-    dx = None
+    
     ###########################################################################
     # TODO: Implement the max-pooling backward pass                           #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    x, pool_param = cache
+
+    pool_height = pool_param["pool_height"]
+    pool_width = pool_param["pool_width"]
+    stride = pool_param["stride"]
+
+    N, C, H, W = x.shape
+    _, _, H_out, W_out = dout.shape
+
+    dx = np.zeros_like(x)
+
+    # Send each gradient to the maximum element in its region
+    for n in range(N):
+        for c in range(C):
+            for i in range(H_out):
+                for j in range(W_out):
+                    h_start = i * stride
+                    h_end = h_start + pool_height
+
+                    w_start = j * stride
+                    w_end = w_start + pool_width
+
+                    # Extract the original pooling region
+                    region = x[n, c, h_start:h_end, w_start:w_end]
+
+                    # Find the position of the maximum value
+                    max_index = np.argmax(region)
+                    max_h, max_w = np.unravel_index(max_index, region.shape)
+
+                    # Pass the gradient to the maximum element
+                    dx[n, c, h_start + max_h, w_start + max_w] += dout[n, c, i, j]
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################

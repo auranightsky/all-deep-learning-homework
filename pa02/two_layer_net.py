@@ -33,7 +33,7 @@ def affine_forward(x, w, b):
     # will need to reshape the input into rows.                               #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    out = x.reshape(x.shape[0], -1).dot(w) + b
     
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -64,7 +64,9 @@ def affine_backward(dout, cache):
     # TODO: Implement the affine backward pass.                               #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    dx = dout.dot(w.T).reshape(x.shape)
+    dw = x.reshape(x.shape[0], -1).T.dot(dout)
+    db = np.sum(dout, axis=0)
     #######################################################################
     #                         END OF YOUR CODE                            #
     #######################################################################
@@ -89,7 +91,7 @@ def relu_forward(x):
     # TODO: Implement the ReLU forward pass.                                  #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    out = np.maximum(0, x)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -113,7 +115,7 @@ def relu_backward(dout, cache):
     # TODO: Implement the ReLU backward pass.                                 #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    dx = dout * (x > 0)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -175,7 +177,15 @@ class TwoLayerNet(object):
         # apply batchnorm, layernorm
         ############################################################################
         # Replace "pass" statement with your code
-        pass
+        self.params["W1"] = weight_scale * np.random.randn(input_dim, hidden_dim)
+        self.params["b1"] = np.zeros(hidden_dim)
+
+        self.params["W2"] = weight_scale * np.random.randn(hidden_dim, num_classes)
+        self.params["b2"] = np.zeros(num_classes)
+
+        if self.normalization == "batchnorm" or self.normalization == "layernorm":
+            self.params["gamma1"] = np.ones(hidden_dim)
+            self.params["beta1"] = np.zeros(hidden_dim)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -232,7 +242,27 @@ class TwoLayerNet(object):
         # apply batchnorm, layernorm, dropout
         ############################################################################
         # Replace "pass" statement with your code
-        pass
+        W1, b1 = self.params["W1"], self.params["b1"]
+        W2, b2 = self.params["W2"], self.params["b2"]
+
+        a1, fc_cache1 = affine_forward(X, W1, b1)
+
+        if self.normalization == "batchnorm":
+            a1, norm_cache = batchnorm_forward(
+                a1, self.params["gamma1"], self.params["beta1"], self.bn_param
+            )
+        elif self.normalization == "layernorm":
+            a1, norm_cache = layernorm_forward(
+                a1, self.params["gamma1"], self.params["beta1"], self.ln_param
+            )
+
+        h1, relu_cache = relu_forward(a1)
+
+        if self.use_dropout:
+            self.dropout_param["mode"] = mode
+            h1, dropout_cache = dropout_forward(h1, self.dropout_param)
+
+        scores, fc_cache2 = affine_forward(h1, W2, b2)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -254,7 +284,44 @@ class TwoLayerNet(object):
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
         # Replace "pass" statement with your code
-        pass
+        # Convert scores to probabilities
+        prob, softmax_cache = softmax_forward(scores)
+        
+        # Calculate cross-entropy loss
+        loss, ce_cache = cross_entropy_forward(prob, y)
+        
+        # Backward pass through cross-entropy
+        dprob = cross_entropy_backward(ce_cache)
+        
+        # Backward pass through softmax
+        dscores = softmax_backward(dprob, softmax_cache)
+
+        loss += 0.5 * self.reg * (
+            np.sum(W1 * W1) + np.sum(W2 * W2)
+        )
+
+        dh1, dW2, db2 = affine_backward(dscores, fc_cache2)
+
+        if self.use_dropout:
+            dh1 = dropout_backward(dh1, dropout_cache)
+
+        dh1 = relu_backward(dh1, relu_cache)
+
+        if self.normalization == "batchnorm":
+            dh1, dgamma1, dbeta1 = batchnorm_backward(dh1, norm_cache)
+            grads["gamma1"] = dgamma1
+            grads["beta1"] = dbeta1
+        elif self.normalization == "layernorm":
+            dh1, dgamma1, dbeta1 = layernorm_backward(dh1, norm_cache)
+            grads["gamma1"] = dgamma1
+            grads["beta1"] = dbeta1
+
+        dX, dW1, db1 = affine_backward(dh1, fc_cache1)
+
+        grads["W1"] = dW1 + self.reg * W1
+        grads["b1"] = db1
+        grads["W2"] = dW2 + self.reg * W2
+        grads["b2"] = db2
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################

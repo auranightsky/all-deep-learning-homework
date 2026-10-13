@@ -5,6 +5,12 @@ from softmax import *
 from layers import *
 from two_layer_net import *
 from CNN import *
+from softmax import (
+    softmax_forward,
+    softmax_backward,
+    cross_entropy_forward,
+    cross_entropy_backward
+)
 
 
 class ThreeLayerConvNet(object):
@@ -65,7 +71,26 @@ class ThreeLayerConvNet(object):
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         
         # Replace "pass" statement with your code
-        pass
+        C, H, W = input_dim
+
+        self.params["W1"] = weight_scale * np.random.randn(
+            num_filters, C, filter_size, filter_size
+        )
+        self.params["b1"] = np.zeros(num_filters)
+
+        # After convolution, 2x2 max pooling halves H and W
+        H_pool = H // 2
+        W_pool = W // 2
+
+        self.params["W2"] = weight_scale * np.random.randn(
+            num_filters * H_pool * W_pool, hidden_dim
+        )
+        self.params["b2"] = np.zeros(hidden_dim)
+
+        self.params["W3"] = weight_scale * np.random.randn(
+            hidden_dim, num_classes
+        )
+        self.params["b3"] = np.zeros(num_classes)
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -101,7 +126,16 @@ class ThreeLayerConvNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         # Replace "pass" statement with your code
-        pass
+        conv, cache_conv = conv_forward(X, W1, b1, conv_param)
+        relu1, cache_relu1 = relu_forward(conv)
+        pool, cache_pool = max_pool_forward(relu1, pool_param)
+        
+        pool_flat = pool.reshape(pool.shape[0], -1)
+        
+        hidden, cache_affine1 = affine_forward(pool_flat, W2, b2)
+        relu2, cache_relu2 = relu_forward(hidden)
+        
+        scores, cache_affine2 = affine_forward(relu2, W3, b3)
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -124,7 +158,47 @@ class ThreeLayerConvNet(object):
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         
         # Replace "pass" statement with your code
-        pass
+        prob, softmax_cache = softmax_forward(scores)
+        loss, ce_cache = cross_entropy_forward(prob, y)
+        
+        dprob = cross_entropy_backward(ce_cache)
+        dscores = softmax_backward(dprob, softmax_cache)
+
+        # L2 regularization
+        loss += 0.5 * self.reg * (
+            np.sum(W1 * W1)
+            + np.sum(W2 * W2)
+            + np.sum(W3 * W3)
+        )
+
+        # Backpropagation through output affine layer
+        dhidden, dW3, db3 = affine_backward(dscores, cache_affine2)
+
+        # Backpropagation through second ReLU
+        dhidden = relu_backward(dhidden, cache_relu2)
+
+        # Backpropagation through hidden affine layer
+        dpool_flat, dW2, db2 = affine_backward(dhidden, cache_affine1)
+
+        # Restore pooled feature map shape
+        dpool = dpool_flat.reshape(pool.shape)
+
+        # Backpropagation through max pool and first ReLU
+        drelu1 = max_pool_backward(dpool, cache_pool)
+        dconv = relu_backward(drelu1, cache_relu1)
+
+        # Backpropagation through convolution
+        dX, dW1, db1 = conv_backward(dconv, cache_conv)
+
+        # Add regularization gradients
+        grads["W1"] = dW1 + self.reg * W1
+        grads["b1"] = db1
+
+        grads["W2"] = dW2 + self.reg * W2
+        grads["b2"] = db2
+
+        grads["W3"] = dW3 + self.reg * W3
+        grads["b3"] = db3
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #

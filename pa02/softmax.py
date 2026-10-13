@@ -31,7 +31,9 @@ def softmax_forward(x):
     # The output should have shape (B, K)         #
     ###########################################################################    
     # Replace "pass" statement with your code
-    pass
+    x_shifted = x - np.max(x, axis=1, keepdims=True)
+    exp_x = np.exp(x_shifted)
+    out = exp_x / np.sum(exp_x, axis=1, keepdims=True)
     #######################################################################
     #                         END OF YOUR CODE                            #
     #######################################################################
@@ -69,7 +71,18 @@ def softmax_backward(dout, cache):
     # then stack the results together using np.stack.
     ###########################################################################    
     # Replace "pass" statement with your code
-    pass
+    x_shifted = Z - np.max(Z, axis=1, keepdims=True)
+    exp_x = np.exp(x_shifted)
+    S = exp_x / np.sum(exp_x, axis=1, keepdims=True)
+
+    def compute_gradient(s, ds):
+        J = np.diag(s) - np.outer(s, s)
+        return ds @ J
+
+    dZ = np.stack([
+        compute_gradient(S[i], dS[i])
+        for i in range(S.shape[0])
+    ])
     #######################################################################
     #                         END OF YOUR CODE                            #
     #######################################################################
@@ -106,7 +119,9 @@ def cross_entropy_forward(prob, y):
     # Store (prob, y_onehot) in cache for the backward pass.        #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    epsilon = 1e-12
+    loss = -np.sum(y_onehot * np.log(prob + epsilon)) / prob.shape[0]
+
     #######################################################################
     #                         END OF YOUR CODE                            #
     #######################################################################
@@ -143,13 +158,13 @@ def cross_entropy_backward(cache):
     ###########################################################################   
 
     # Replace "pass" statement with your code
-    pass
+    epsilon = 1e-12
+    dS = -y_onehot / (prob + epsilon)
+    dS /= prob.shape[0]
+
     #######################################################################
     #                         END OF YOUR CODE                            #
     #######################################################################
-
-    
-    
     
     return dS
 
